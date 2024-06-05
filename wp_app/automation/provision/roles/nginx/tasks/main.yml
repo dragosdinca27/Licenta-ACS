@@ -1,0 +1,178 @@
+---
+- name: Get gpg nginx repo key
+  apt_key:
+    url: http://nginx.org/keys/nginx_signing.key
+    state: present
+
+- name: Add nginx source repo to local apt sources
+  apt_repository:
+    repo: deb http://nginx.org/packages/debian/ {{ ansible_distribution_release }} nginx
+    state: present
+    filename: nginx
+    update_cache: yes
+  when: ansible_distribution == "Debian"
+
+- name: Add Nginx official repository
+  apt_repository:
+    repo: '{{ nginx_repository }}'
+    state: present
+    update_cache: yes
+  when: ansible_distribution == "Ubuntu"
+
+- name: Install Nginx
+  package:
+    name: nginx
+    state: '{{ nginx_state }}'
+
+- name: Ensure Nginx service is enabled on startup
+  service:
+    name: nginx
+    enabled: yes
+    use: service
+
+- name: Ensure Nginx service is started
+  service:
+    name: nginx
+    state: started
+    use: service
+  when: nginx_start | bool
+
+- name: Delete default files from nginx install
+  file:
+    path: "{{ item }}"
+    state: absent
+  with_items:
+    - '{{ nginx_conf_path }}/default.conf'
+    - /var/www/html
+
+- name: Install Nginx Geoip package
+  package:
+    name: nginx-module-geoip
+    state: '{{ nginx_state }}'
+  when: nginx_geoip == true
+
+- name: Replace the Nginx conf file
+  template:
+    src: '{{ nginx_conf_file_template }}'
+    dest: '{{ nginx_conf_file_path }}'
+  notify: restart nginx
+
+- name: Create default folders inside conf.d
+  file:
+    path: "{{ nginx_conf_path }}/{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    recurse: yes
+  with_items: "{{ nginx_default_conf_dirs }}"
+
+- name: Copy performance settings file
+  copy:
+    src: '{{ nginx_conf_performance_file }}'
+    dest: '{{ nginx_conf_path }}/performance.conf'
+    owner: root
+    group: root
+  notify: reload nginx
+
+- name: Ensure folder for security setting files exists
+  file:
+    path: "{{ nginx_conf_security_path }}"
+    state: directory
+    owner: root
+    group: root
+    recurse: yes
+
+- name: Copy security headers settings file
+  copy:
+    src: '{{ nginx_conf_security_file }}'
+    dest: '{{ nginx_conf_security_path }}/security.conf'
+    owner: root
+    group: root
+  notify: reload nginx
+
+- name: Copy deny files settings file
+  copy:
+    src: '{{ nginx_conf_deny_files_file }}'
+    dest: '{{ nginx_conf_security_path }}/deny-files.conf'
+    owner: root
+    group: root
+  notify: reload nginx
+
+- name: Copy static content settings file
+  copy:
+    src: '{{ nginx_conf_static_content_file }}'
+    dest: '{{ nginx_conf_path }}/static-content.conf'
+    owner: root
+    group: root
+  notify: reload nginx
+
+- name: Copy GZIP settings file
+  copy:
+    src: '{{ nginx_conf_gzip_file }}'
+    dest: '{{ nginx_conf_path }}/gzip.conf'
+    owner: root
+    group: root
+  notify: reload nginx
+
+  # Todo: We should not use the 'apps' variable here
+- name: Generate httpauth settings file
+  template:
+    src: httpauth.conf.tpl
+    dest: '{{ nginx_conf_path }}/httpauth.conf'
+    owner: root
+    group: root
+  with_dict: "{{ apps }}"
+  when: item.value.http_auth is defined
+  notify: reload nginx
+  no_log: true
+
+- name: Determine required MySQL Passlib library
+  set_fact:
+    passlib_python_package: "{% if 'python3' in ansible_python_interpreter|default('') %}python3-passlib{% else %}python-passlib{% endif %}"
+
+  # Todo: We should not use the 'apps' variable here
+- name: Make sure we can use htpasswd module
+  apt:
+    pkg: '{{ passlib_python_package }}'
+    state: present
+  with_dict: "{{ apps }}"
+  when: item.value.http_auth is defined
+  no_log: true
+
+  # Todo: We should not use the 'apps' variable here
+- name: Generate http auth password file
+  htpasswd:
+    path: '{{ nginx_conf_path }}/passwdfile'
+    name: '{{ nginx_http_auth_user }}'
+    password: '{{ item.value.http_auth }}'
+    owner: root
+    group: '{{ nginx_group }}'
+    mode: 0644
+  with_dict: "{{ apps }}"
+  when: item.value.http_auth is defined
+  no_log: true
+
+- name: Ensure sites-available and sites-enabled directories exist
+  file:
+    dest: '{{ nginx_path }}/{{ item }}'
+    owner: root
+    group: root
+    state: directory
+  with_items:
+    - sites-enabled
+    - sites-available
+
+- name: Generate nginx status config host
+  template:
+    src: '{{ nginx_conf_status_template }}'
+    dest: '{{ nginx_path }}/sites-available/nginx-status.conf'
+  when: nginx_status_enabled == true
+  notify: reload nginx
+
+- name: Enable nginx status host
+  file:
+    src: '{{ nginx_path }}/sites-available/nginx-status.conf'
+    dest: '{{ nginx_path }}/sites-enabled/nginx-status.conf'
+    state: link
+  when: nginx_status_enabled == true
+  notify: reload nginx

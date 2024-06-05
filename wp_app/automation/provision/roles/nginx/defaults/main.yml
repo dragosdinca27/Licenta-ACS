@@ -1,0 +1,45 @@
+---
+# Start NGINX service
+nginx_start: true
+
+# Specify package state (present, latest, absent)
+nginx_state: present
+
+# Specify repository used to install nginx
+nginx_repository: ppa:nginx/stable
+
+# Default Nginx config directories
+nginx_default_conf_dirs: []
+
+# Default config file template
+nginx_conf_file_template: nginx-default.conf.tpl
+
+# Default path for security config files
+nginx_conf_security_path: '{{ nginx_conf_path }}'
+
+# Default config files
+nginx_conf_performance_file: performance-default.conf
+nginx_conf_security_file: security-default.conf
+nginx_conf_deny_files_file: deny-files-default.conf
+nginx_conf_static_content_file: static-content-default.conf
+nginx_conf_gzip_file: gzip-default.conf
+
+# Default Nginx user and group
+nginx_user: www-data
+nginx_group: www-data
+
+# Default user for basic HTTP authentication
+nginx_http_auth_user: zitec
+
+# Install and enable GeoIP module
+nginx_geoip: false
+
+# Default nginx status config template
+nginx_conf_status_template: nginx-status-default.conf.tpl
+
+# Configure nginx status conf
+nginx_status_enabled: no
+nginx_status_listen_port: 80
+nginx_status_server_name: localhost
+nginx_status_allowed_ips:
+  - 127.0.0.1

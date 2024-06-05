@@ -1,0 +1,12 @@
+---
+
+#Vars for deploy with git
+project_has_composer: false
+
+project_git_repo: git@34.107.63.49:proiect-licenta/application.git
+project_deploy_strategy: git
+project_version: master
+project_deploy_hook_post_finalize: hooks/post_finalize.yml
+project_root: /var/www/deprinsud
+template_name: wp-config.php.conf
+project_deploy_key: files/id_rsa

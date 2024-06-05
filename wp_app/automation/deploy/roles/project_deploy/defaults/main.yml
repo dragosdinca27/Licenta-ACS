@@ -1,0 +1,191 @@
+---
+
+# These variables must be set
+# project_root: "path_to_project_on_the_target_machine"
+# project_deploy_strategy: "git" or "synchronize"
+
+
+# If you use the "git" strategy:
+# - you must set a repository (no default)
+# project_git_repo: "git_repository"
+
+# Project git depth, useful to not clone the entire history
+project_git_depth: 1
+# - you can set the git ref to deploy (can be a branch, tag or commit hash)
+project_version: "master"
+
+# Option to create project root using become: yes
+project_root_create: false
+project_root_owner: "{{ ansible_user|default(ansible_env.username) }}"
+project_root_group: "{{ ansible_user|default(ansible_env.username) }}"
+
+# DEPRECATED
+# For git, the .git folder is automatically removed
+#project_remove_git_folder: true
+
+# If you use the "rsync" strategy:
+# - you can set a timeout for the synchonize module
+project_deploy_synchronize_timeout: 30
+# - you can also delete files that don't exist on source after synchronizing
+project_deploy_synchronize_delete: false
+# - you must set the path to your local source (the default assumes your playbook is located in /ansible/ )
+project_local_path: "../"
+
+# If you use the "s3" strategy:
+# - region of your bucket
+project_s3_region: 'eu-west-1'
+# - your bucket
+project_s3_bucket: 'my-bucket'
+# - the path to the file to get
+project_s3_path: '/my-app/'
+# - file to get
+project_s3_filename: my-app-master.war
+# - final filename to write (usefull for tomcat/wars)
+# project_final_filename: my-app.war
+
+# If you use the "archive" strategy
+# control if the archive already exists on the remote host or not
+project_archive_remote_src: no
+
+# The source_path is used to fetch the tags from git, or synchronise via rsync. This way
+# you do not have to download/sync the entire project on every deploy
+project_source_path: "{{ project_root }}/shared/source"
+
+# The shared_path is used to set the path for your shared assets.
+# Example:
+# project_shared_path: "/var/shared"
+project_shared_path: "{{ project_root }}/shared"
+
+# Files or folders to remove from the source when deploying
+project_unwanted_items: [ '.git' ]
+
+# DEPRECATED
+# The build_path is used to build your project in, prior to moving it to the release folder.
+# If it exists, this path will be deleted before a new build is started
+# (under the assumption that it contains a failed previous build)
+# project_build_path: "{{ project_root }}/build"
+
+# The project does not assume any package manager, you can enable whichever one(s) you use.
+project_has_composer: false
+project_has_npm: false
+project_has_bower: false
+project_has_yarn: false
+
+# Default values to run composer install
+project_composer_binary: composer
+project_command_for_composer_install: "{{ project_composer_binary }} install --no-ansi --no-interaction --no-progress --optimize-autoloader --no-scripts"
+# When set to true the old vendor dir is copied to the new release to speed up composer install
+project_copy_previous_composer_vendors: false
+project_composer_vendor_path: vendor
+
+# Default values to run npm install
+project_npm_binary: npm
+project_command_for_npm_install: "{{ project_npm_binary }} install --production"
+# When set to true the old modules dir is copied to the new release to speed up npm install
+project_copy_previous_npm_modules: false
+# This *looks* like a setting, but in fact it's not:
+# https://docs.npmjs.com/misc/faq#-node_modules-is-the-name-of-my-deity-s-arch-rival-and-a-forbidden-word-in-my-religion-can-i-configure-npm-to-use-a-different-folder-
+# (preemtively added in case pigs ever learn to fly)
+project_npm_modules_path: node_modules
+
+# Default values to run bower install
+project_bower_binary: bower
+project_command_for_bower_install: "{{ project_bower_binary }} install --production --config.interactive=false"
+# When set to true the old components dir is copied to the new release to speed up bower install
+project_copy_previous_bower_components: false
+project_bower_components_path: components
+
+# Default values to run yarn install
+project_yarn_binary: yarn
+project_command_for_yarn_install: "{{ project_yarn_binary }} install --non-interactive --silent"
+
+# All the files to copy to the remote system on deploy. These could contain config files.
+# Example:
+# project_files:
+#   - name: "some_file"           // <- optional, for your own reference and readability
+#     src: "local-path-to-file"   // <- relative or absolute, just like Ansible
+#     dest: "remote-path-to-file"
+#   - name: "some_other_file"
+#     src: "local-path-to-other-file"
+#     dest: "remote-path-to-other-file"
+project_files: []
+
+# All the templates to copy to the remote system on deploy. These could contain config files.
+# Works the same as the project_files
+project_templates: []
+
+# The shared_children is a list of all files/folders in your project that need to be linked to a path in "{{ project_shared_path }}.
+# For example a sessions directory or an uploads folder.. They are created if they don't exist, with the type
+# specified in the "type" key (file or directory).
+# Example:
+# project_shared_children:
+#   - path: "/app/sessions"
+#     src: "sessions"
+#     type: "file" / "directory"  // <- optional, defaults to "directory"
+#   - path: "/web/uploads"
+#     src: "uploads"
+project_shared_children: []
+
+# The project_permissions is a list of files/folders in your project that you want to set permissions
+# For example a cache directory or logs directory. The path must exists before setting the permissions.
+# Example:
+# project_permissions:
+#   - path: "{{ deploy_helper.new_release_path }}/cache"
+#     owner: deploy
+#     group: deploy
+#     mode: "0775"
+#     facl: default:group:www-data:rw-
+
+project_permissions: {}
+# The project_environment is a list of environment variables added to the various *_commands
+# Example:
+# project_environment:
+#   SYMFONY_ENV: "prod"
+project_environment: {}
+project_env_file:
+  path: "/etc/environment"
+  user: "root"
+  group: "root"
+  mode: '0644'
+
+# The project_persistent_environment is a list of environment variables added made available system wide
+# By adding them to the /etc/environment file
+# Example:
+# project_persistent_environment:
+#   APP_ENV: "prod"
+project_persistent_environment: {}
+
+# The set_server_persistent_environment controls if the environment variables are added to /etc/environment.
+# to the /etc/environment file.
+# Example:
+# set_server_persistent_environment: true
+set_server_persistent_environment: true
+
+# There are a few moments in this role where arbitrary command(s) can be run. These commands receive
+# the "project_environment" so deploys for different stages can be done by changing this .
+# Example:
+# project_post_build_commands:
+#   - "app/console cache:clear"
+#   - "app/console doctrine:migrations:migrate --no-interaction"
+#   - "app/console assets:install"
+#   - "app/console assetic:dump"
+project_pre_build_commands: []
+project_post_build_commands: []
+
+# At the end of the role, the unfinished_filename is removed and the "current" symlink is set to
+# the release. If you need to perform your own actions before this happens, set "project_finalize"
+# to false, and when you're ready, perform these tasks yourself:
+# - file: path={{ deploy.new_release_path }}/{{ deploy.unfinished_filename }} state=absent
+# - file: src={{ deploy.new_release_path }} dest={{ deploy.current_path }} state=link
+project_finalize: true
+
+# When finalizing, by default old releases will be cleanud up.
+# Set "project_clean" to false if you don't want this to happen.
+project_clean: true
+
+# When finalizing, by default old releases will be cleanud up. By default 5 release will be kept.
+# Set "project_keep_releases" when you want less or more release kept. Minimal is 1.
+project_keep_releases: 5
+
+# The name of the symlink that is created when the deploy is finalized.
+project_current_path: current

@@ -1,0 +1,7 @@
+[prod]
+web01 ansible_host=18.159.129.72 accept_hostkey=true ansible_python_interpreter=/usr/bin/python3
+web02 ansible_host=3.122.252.24 accept_hostkey=true ansible_python_interpreter=/usr/bin/python3
+web03 ansible_host=35.158.121.159 accept_hostkey=true ansible_python_interpreter=/usr/bin/python3
+
+[mysql]
+mysql ansible_host=18.159.129.72 accept_hostkey=true ansible_python_interpreter=/usr/bin/python3

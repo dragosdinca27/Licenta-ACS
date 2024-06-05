@@ -1,0 +1,61 @@
+image:
+  name: jugit-registry.fz-juelich.de/docker-images/gitlabci-ansible
+
+stages:
+  - provision
+  - mysql
+
+.provision:
+  stage: provision
+  when: manual
+  variables:
+    ANSIBLE_FORCE_COLOR: 'true'
+    INVENTORY: hosts
+    TARGET: ''
+    PLAYBOOK: ''
+  before_script:
+      - chmod 600 $SSH_PRIVATEKEY
+      - export ANSIBLE_HOST_KEY_CHECKING=False
+  script:
+    - ansible-playbook -i inventories/$INVENTORY
+      --user ansible
+      --key-file "$SSH_PRIVATEKEY"
+      --vault-password-file=$ANSIBLE_VAULT_FILE
+      --extra-vars "target=$TARGET"
+      "$PLAYBOOK"
+  except:
+    - schedules
+
+prod:
+  extends: .provision
+  variables:
+    TARGET: 'prod'
+    PLAYBOOK: 'provision/prod.yml'
+
+
+.mysql:
+  stage: mysql
+  image: jugit-registry.fz-juelich.de/docker-images/gitlabci-ansible
+  when: manual
+  needs: []
+  variables:
+    GIT_SUBMODULE_STRATEGY: normal
+  before_script:
+      - chmod 600 $SSH_PRIVATEKEY
+      - export ANSIBLE_HOST_KEY_CHECKING=False
+  script:
+    - ansible-playbook -i inventories/$INVENTORY
+      --user ansible
+      --key-file "$SSH_PRIVATEKEY"
+      --vault-password-file=$ANSIBLE_VAULT_FILE
+      --extra-vars "target=$TARGET"
+      provision/$PLAYBOOK
+  only:
+    - merge_request
+    - master
+
+mysql_prod:
+  extends: .mysql
+  variables:
+    TARGET: 'mysql'
+    PLAYBOOK: mysql_prod.yml

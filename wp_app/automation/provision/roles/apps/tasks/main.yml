@@ -1,0 +1,44 @@
+---
+# Application tasks to be customized and to run after the main provision
+
+
+- name: Add Nginx configuration files for the defined apps
+  template: src={{ item.value.template }} dest=/etc/nginx/sites-available/{{item.key}}
+  with_dict: "{{apps}}"
+
+- name: Add Nginx configuration files for the defined apps
+  template: src={{ item.value.template_proxy }} dest=/etc/nginx/sites-available/{{item.key}}-front
+  with_dict: "{{apps}}"
+  when: item.value.template_proxy is defined
+
+- name: Create folders inside conf.d
+  file: path=/etc/nginx/{{ item }} state=directory owner=root group=root recurse=yes
+  with_items:
+    - conf.d/security
+    - conf.d/static
+
+- name: Copy Nginx config files
+  copy: src=nginx/{{ item }} dest=/etc/nginx/conf.d owner=root group=root
+  with_items: "{{ nginx_conf }}"
+  when: nginx_conf is defined
+
+- name: Enable Nginx configuration files for the defined apps
+  file: src=/etc/nginx/sites-available/{{item.key}} dest=/etc/nginx/sites-enabled/{{item.key}} state=link
+  with_dict: "{{apps}}"
+
+- name: Enable Nginx configuration files for the defined apps
+  file: src=/etc/nginx/sites-available/{{item.key}}-front dest=/etc/nginx/sites-enabled/{{item.key}}-front state=link
+  with_dict: "{{apps}}"
+  when: item.value.template_proxy is defined
+
+- name: check if wp-cli is installed
+  stat:
+    path: /usr/local/bin/wp
+  register: wp_exists
+
+- name: "Install the Wp-cli tool"
+  get_url:
+    url: https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
+    dest: /usr/local/bin/wp
+    mode: '0755'
+  when: wp_exists != True

@@ -1,0 +1,90 @@
+---
+- name: Install GitLab
+  hosts: gitlab
+  become: yes
+
+  handlers:
+    - name: reconfigure gitlab
+      command: gitlab-ctl reconfigure
+      environment:
+        SKIP_POST_DEPLOYMENT_MIGRATIONS: true
+
+    - name: run database migrations
+      command: gitlab-rake db:migrate
+
+    - name: hot reload puma
+      command: gitlab-ctl hup puma
+
+    - name: restart sidekiq
+      command: gitlab-ctl restart sidekiq
+
+  tasks:
+    - name: Create gitlab directory
+      file:
+        path: /var/opt/gitlab
+        state: directory
+
+    - name: Mount data disk
+      mount:
+        path: /var/opt/gitlab
+        src: UUID=c2733a02-5645-4ad8-85c9-c37fb13b2dbb
+        fstype: ext4
+        opts: discard,defaults,nofail
+        state: mounted
+
+    - name: Intall Gitlab dependencies
+      package:
+        name: '{{ item }}'
+        state: present
+      with_items:
+        - curl
+        - openssh-server
+        - ca-certificates
+
+    - name: "Add gitlab-ce apt key"
+      apt_key:
+        url: https://gitlab-org.gitlab.io/omnibus-gitlab/gitlab_new_gpg.key
+        id: 3F01618A51312F3F
+
+    - name: "Add apt repository of gitlab-ce"
+      apt_repository:
+        repo: "deb https://packages.gitlab.com/gitlab/gitlab-ce/{{ ansible_distribution | lower }} {{ ansible_lsb.codename }} main"
+
+    - name: Skip auto reconfigure to allow zero downtime updates
+      file:
+        path: /etc/gitlab/skip-auto-reconfigure
+        state: touch
+
+    - name: "Install gitlab-ce"
+      apt:
+        name: gitlab-ce={{ gitlab_version }}-ce.*
+      environment:
+         EXTERNAL_URL: '{{ gitlab_url }}'
+      notify:
+        - reconfigure gitlab
+        - run database migrations
+        - hot reload puma
+        - restart sidekiq
+
+    - name: Set external url
+      lineinfile:
+        path: /etc/gitlab/gitlab.rb
+        regexp: '^external_url '
+        line: external_url "{{ gitlab_url }}"
+
+    - name: Include custom config file in gitlab config
+      lineinfile:
+        path: /etc/gitlab/gitlab.rb
+        line: from_file "/etc/gitlab/config_gitlab.rb"
+
+    - name: Add custom config file
+      template:
+        src: config_gitlab.rb
+        dest: /etc/gitlab/config_gitlab.rb
+      notify: reconfigure gitlab
+
+    - name: Copy service account credentials
+      copy:
+        src: gitlab-instance-sa.json
+        dest: /etc/gitlab/gitlab-instance-sa.json
+        mode: '0644'

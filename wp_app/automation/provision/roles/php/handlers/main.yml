@@ -1,0 +1,7 @@
+---
+
+- name: restart php-fpm
+  include_tasks: ../handlers/restart-php-fpm.yml
+
+- name: reload php-fpm
+  include_tasks: ../handlers/reload-php-fpm.yml

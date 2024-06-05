@@ -1,0 +1,49 @@
+---
+- name: Make sure pymysql is present
+  become: true # needed if the other tasks are not played as root
+  pip:
+    name: pymysql
+    state: present
+
+- name: Generate database names
+  set_fact:
+    mysql_databases_list: "{{ dbs | from_json }}"
+  vars:
+    dbs: >-
+      {% set result = [] %}
+      {% for db, suffixes in mysql_databases.items() %}
+          {% set _ = result.append(db) %}
+          {% for suffix in suffixes %}
+            {% set _ = result.append(db + "-" + suffix) %}
+          {% endfor %}
+      {% endfor %}
+      {{ result | to_json }}
+
+- name: Create databases
+  mysql_db:
+    login_host: "{{ mysql_host }}"
+    login_user: "{{ mysql_admin_user }}"
+    login_password: "{{ mysql_admin_password }}"
+    ca_cert: "{{ mysql_ca_cert | default(omit) }}"
+    name: "{{ item }}"
+  loop: "{{ mysql_databases_list }}"
+  register: mysql_create_db
+  until: not mysql_create_db.failed
+  retries: 5
+
+- name: Create users
+  mysql_user:
+    login_host: "{{ mysql_host }}"
+    login_user: "{{ mysql_admin_user }}"
+    login_password: "{{ mysql_admin_password }}"
+    ca_cert: "{{ mysql_ca_cert | default(omit) }}"
+    name: "{{ item.key }}"
+    password: "{{ item.value.password }}"
+    host: "{{ item.value.host if item.value.host is defined else '%' }}"
+    priv: "{{ '/'.join(item.value.tables) }}"
+    append_privs: yes
+  no_log: yes
+  loop: "{{ mysql_users | dict2items  }}"
+  register: mysql_create_user
+  until: not mysql_create_user.failed
+  retries: 5

@@ -1,0 +1,33 @@
+---
+
+- name: Check if license key is defined
+  assert:
+    that:
+      - newrelic_license is defined
+
+- name: setup agent repo keys
+  apt_key:
+    url: https://download.newrelic.com/infrastructure_agent/gpg/newrelic-infra.gpg
+    state: present
+
+- name: Add license key
+  copy:
+    dest: /etc/newrelic-infra.yml
+    content: "license_key: {{ newrelic_license }}"
+
+- name: confirm Debian apt-transport-https is present
+  apt:
+    name: apt-transport-https
+    state: present
+
+- name: setup agent repo reference
+  apt_repository:
+    repo: "deb [arch=amd64] https://download.newrelic.com/infrastructure_agent/linux/apt bionic main"
+    state: present
+    update_cache: "yes"
+
+- name: Install newrelic-infra
+  package:
+    name:
+      - newrelic-infra          
+    state: present

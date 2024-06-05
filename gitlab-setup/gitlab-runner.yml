@@ -1,0 +1,38 @@
+---
+
+- name: Install GitLab Runner
+  hosts: runner
+  become: yes
+
+handlers:
+- name: restart gitlab-runner
+  service: name=gitlab-runner state=restarted
+
+tasks:
+- name: Get Gitlab repository installation script
+  get_url:
+    url: https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh
+    dest: /tmp/gitlab-runner.script.deb.sh
+    mode: 0744
+
+- name: Install Gitlab repository
+  command: bash /tmp/gitlab-runner.script.deb.sh
+  args:
+    creates: /etc/apt/sources.list.d/runner_gitlab-runner.list
+
+- name: Install GitLab Runner
+  apt:
+    name: gitlab-runner={{ gitlab_runner_version }}
+    state: present
+
+- name: Copy service account credentials
+  copy:
+    src: gitlab-runner.json
+    dest: /etc/gitlab-runner/gitlab-runner-cache-sa.json
+    mode: '0600'
+
+- name: Add Gitlab Runner template
+  template:
+    src: config.toml.tpl
+    dest: /etc/gitlab-runner/config.toml
+  notify: restart gitlab-runner

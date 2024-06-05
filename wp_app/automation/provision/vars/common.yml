@@ -1,0 +1,100 @@
+---
+server_default_packages:
+  - python2-minimal
+  - python3-software-properties
+  - python3-pip
+  - git
+  - curl
+  - vim
+php_version: 7.4
+
+php_composer: true
+php_packages:
+  - "php{{ php_version }}-redis"
+  - "php{{ php_version }}-mbstring"
+  - "php{{ php_version }}-gd"
+  - "php{{ php_version }}-memcached"
+
+php_fpm_pool_default_conf:
+  - option: listen.owner
+    value: www-data
+  - option: listen.group
+    value: www-data
+  - option: pm.max_children
+    value: 75
+  - option: pm.start_servers
+    value: "8"
+  - option: pm.min_spare_servers
+    value: "{{ [(ansible_processor_vcpus )|int, 1]|max }}"
+  - option: pm.max_spare_servers
+    value: "8"
+  - option: pm.max_requests
+    value: 500
+
+php_composer_self_update: fasle
+
+php_config_ini:
+  fpm:
+    - option: upload_max_filesize
+      value: 20M
+    - option: post_max_size
+      value: 40M
+    - option: max_execution_time
+      value: 300
+
+
+php_cli_ini_conf:
+  - section: Date
+    option: date.timezone
+    value: '{{ php_timezone }}'
+  - section: opcache
+    option: opcache.enable
+    value: 1
+  - section: PHP
+    option: upload_max_filesize
+    value: 20M
+
+
+php_fpm_ini_conf:
+  - section: Date
+    option: date.timezone
+    value: '{{ php_timezone }}'
+  - section: PHP
+    option: error_log
+    value: /var/log/php/error.log
+  - section: opcache
+    option: opcache.enable
+    value: 1
+  - section: PHP
+    option: upload_max_filesize
+    value: 20M
+  - section: PHP
+    option: memory_limit
+    value: 1G
+  - section: PHP
+    option: max_input_variables
+    value: 5000
+  - section: PHP
+    option: set_time_limit
+    value: 200
+  - section: PHP
+    option: Max_execution_time
+    value: 200
+  - section: PHP
+    option: post_max_size
+    value: 30m
+
+
+server_packages:
+  - memcached
+
+nginx_conf:
+  - conf.d/security
+  - conf.d/static
+
+mysql:
+ root_password:
+ databases: ["{{database.name}}","{{database.name}}"]
+ user: "{{ database.user }}"
+ password: "{{ database.password }}"
+mysql_root_password: ""

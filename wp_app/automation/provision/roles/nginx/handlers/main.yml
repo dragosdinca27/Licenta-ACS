@@ -1,0 +1,13 @@
+---
+
+- name: restart nginx
+  include_tasks: ../handlers/restart-nginx.yml
+
+- name: reload nginx
+  include_tasks: ../handlers/reload-nginx.yml
+
+- name: restart webserver
+  include_tasks: ../handlers/restart-nginx.yml
+
+- name: reload webserver
+  include_tasks: ../handlers/reload-nginx.yml

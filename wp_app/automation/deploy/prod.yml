@@ -1,0 +1,12 @@
+---
+
+- name:  Host {{ target }} deploy
+  hosts: '{{ target }}'
+  become: yes
+
+  vars_files:
+    - ../vars/prod.yml
+    - vars/prod.yml
+
+  roles:
+    - project_deploy

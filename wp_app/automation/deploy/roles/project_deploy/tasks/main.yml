@@ -1,0 +1,274 @@
+---
+
+### Initialize
+- name: Include initialize hook
+  include_tasks: "{{ project_deploy_hook_on_initialize }}"
+  when: project_deploy_hook_on_initialize is defined and project_deploy_hook_on_initialize
+
+- name: Ensure project root exists
+  file:
+    path: "{{ project_root }}"
+    owner: "{{ project_root_owner }}"
+    group: "{{ project_root_group }}"
+    state: directory
+  when: project_root_create|bool == true and project_root is defined
+  become: yes
+  become_user: root
+
+- name: Initialize
+  deploy_helper: "path={{ project_root }} release={{ project_release|default(omit) }} state=present shared_path={{ project_shared_path }}"
+
+- name: Delete intermediary source directory for archive deployment
+  file: path={{ project_source_path }} state=absent mode=0755
+  when: project_deploy_strategy == 'archive'
+
+- name: Create intermediary source directory for archive deployment
+  file: path={{ project_source_path }} state=directory mode=0755
+  when: project_deploy_strategy == 'archive'
+
+- name: Ensure .ssh folder exists in user\'s home
+  file: path=~/.ssh state=directory mode=0700
+  when: project_deploy_key is defined
+
+- name: Copy SSH key for deploy
+  copy: src="{{ project_deploy_key }}" dest="~/.ssh/id_rsa" mode=0600
+  when: project_deploy_key is defined and not project_deploy_key == false
+
+### Set global environment variables
+### These tasks require sudo privileges
+- name: Remove previous persistent environment variables
+  lineinfile:
+    dest: '{{ project_env_file.path }}'
+    regexp: '^{{ item.key }}\ ?='
+    state: absent
+    mode: '{{ project_env_file.mode }}'
+    owner: '{{ project_env_file.user }}'
+    group: '{{ project_env_file.group }}'
+  with_dict: "{{ project_persistent_environment }}"
+  when: project_persistent_environment|length > 0 and set_server_persistent_environment
+  become: true
+  become_user: root
+  no_log: true
+
+- name: Add persistent environment variables
+  lineinfile:
+    dest: '{{ project_env_file.path }}'
+    line: "{{ item.key }}='{{ item.value }}'"
+    mode: '{{ project_env_file.mode }}'
+    owner: '{{ project_env_file.user }}'
+    group: '{{ project_env_file.group }}'
+  with_dict: "{{ project_persistent_environment }}"
+  when: project_persistent_environment|length > 0 and set_server_persistent_environment
+  become: true
+  become_user: root
+  no_log: true
+
+### Update source
+- name: Include update_source hook
+  include_tasks: "{{ project_deploy_hook_on_update_source }}"
+  when: project_deploy_hook_on_update_source is defined and project_deploy_hook_on_update_source
+
+- name: Clone project files
+  git:
+    repo: "{{ project_git_repo }}"
+    dest: "{{ project_source_path }}"
+    version: "{{ project_version }}"
+    force: true
+    accept_hostkey: true
+    ssh_opts: '-o StrictHostKeyChecking=no'
+    depth: "{{ project_git_depth }}"
+  when: project_deploy_strategy == 'git'
+  register: project_git_repo_facts
+
+- name: Rsync project files
+  synchronize: "src={{ project_local_path }} dest={{ project_source_path }} rsync_timeout={{ project_deploy_synchronize_timeout }} delete={{ project_deploy_synchronize_delete }} recursive=yes "
+  when: project_deploy_strategy == 'synchronize' and rsync_from_test is not defined
+
+- name: Rsync project files from test
+  synchronize:
+    mode: push
+    src: "{{ project_local_path }}"
+    dest: "{{ project_source_path }}"
+    rsync_timeout: "{{ project_deploy_synchronize_timeout }}"
+    delete: "{{ project_deploy_synchronize_delete }}"
+    recursive: yes
+  when: project_deploy_strategy == 'synchronize' and rsync_from_test is defined and rsync_from_test == 'true'
+  delegate_to: "{{ test_invetory_address }}"
+
+- name: S3 download project files
+  aws_s3: "bucket={{ project_s3_bucket }} mode=get object='{{ project_s3_path }}/{{ project_s3_filename }}' dest='{{ project_source_path }}/{{ project_final_filename|default(project_s3_filename) }}' aws_access_key={{ aws_access_key }} aws_secret_key={{ aws_secret_key }} region={{ project_s3_region }}"
+  when: project_deploy_strategy == 's3'
+
+- name: Unzip specified archive
+  unarchive:
+    src: "{{ project_archive }}"
+    dest: "{{ project_source_path }}"
+    remote_src: "{{ project_archive_remote_src }}"
+  when: project_deploy_strategy == 'archive'
+
+- name: Write unfinished file
+  file: "path={{ project_source_path }}/{{ deploy_helper.unfinished_filename }} state=touch"
+
+### Create build dir
+- name: Include create_build_dir hook
+  include_tasks: "{{ project_deploy_hook_on_create_build_dir }}"
+  when: project_deploy_hook_on_create_build_dir is defined and project_deploy_hook_on_create_build_dir
+
+- name: Copy files to new build dir
+  command: "/bin/cp -prT {{ project_source_path }} {{ deploy_helper.new_release_path }}"
+
+- name: Remove unwanted files/folders from new release
+  file: "path={{ deploy_helper.new_release_path }}/{{ item }} state=absent"
+  with_items: "{{ project_unwanted_items }}"
+
+- name: Copy project files
+  copy: src={{ item.src }} dest={{ deploy_helper.new_release_path }}/{{ item.dest }} mode={{ item.mode|default('0644') }}
+  with_items: "{{ project_files }}"
+
+- name: Copy project templates
+  template: src={{ item.src }} dest={{ deploy_helper.new_release_path }}/{{ item.dest }} mode={{ item.mode|default('0644') }}
+  with_items: "{{ project_templates }}"
+
+### Make shared resources
+- name: Include make_shared_resources hook
+  include_tasks: "{{ project_deploy_hook_on_make_shared_resources }}"
+  when: project_deploy_hook_on_make_shared_resources is defined and project_deploy_hook_on_make_shared_resources
+
+- name: Ensure shared sources are present
+  file: "path='{{ deploy_helper.shared_path }}/{{ item.src }}' state={{ item.type|default('directory') }}"
+  with_items: "{{ project_shared_children }}"
+
+- name: Ensure directories for shared paths to go into are present
+  file: "path={{ [deploy_helper.new_release_path, item.path] | join('/') | dirname }} state=directory recurse=yes"
+  with_items: "{{ project_shared_children }}"
+
+- name: Ensure shared paths themselves are absent
+  file: "path='{{ deploy_helper.new_release_path }}/{{ item.path }}' state=absent"
+  with_items: "{{ project_shared_children }}"
+
+- name: Create shared symlinks
+  file: "path='{{ deploy_helper.new_release_path }}/{{ item.path }}' src='{{ deploy_helper.shared_path }}/{{ item.src }}' state=link"
+  with_items: "{{ project_shared_children }}"
+
+  ### Set project permissions
+- name: Ensure project permissions owner
+  file:
+    path: "{{ item.path }}"
+    owner: "{{ item.owner }}"
+    state: "{{ item.state | default(file) }}"
+  with_items: "{{ project_permissions }}"
+  when: item.owner is defined
+
+- name: Ensure project permissions group
+  file:
+    path: "{{ item.path }}"
+    group: "{{ item.group }}"
+    state: "{{ item.state | default(file) }}"
+  with_items: "{{ project_permissions }}"
+  when: item.group is defined
+
+- name: Ensure project permissions mode
+  file:
+    path: "{{ item.path }}"
+    mode: "{{ item.mode }}"
+    state: "{{ item.state | default(file) }}"
+  with_items: "{{ project_permissions }}"
+  when: item.mode is defined
+
+- name: Ensure project permissions facl
+  acl:
+    path: "{{ item.path }}"
+    entry: "{{ item.facl }}"
+    state: present
+  with_items: "{{ project_permissions }}"
+  when: item.facl is defined
+
+  ### Perform build
+- name: Include perform_build hook
+  include_tasks: "{{ project_deploy_hook_on_perform_build }}"
+  when: project_deploy_hook_on_perform_build is defined and project_deploy_hook_on_perform_build
+
+- name: Run pre_build_commands in the new_release_path
+  command: "{{ item }} chdir={{ deploy_helper.new_release_path }}"
+  with_items: "{{ project_pre_build_commands }}"
+  environment: "{{ project_environment }}"
+
+- name: Check if vendor dir exists
+  stat: path={{ deploy_helper.current_path }}/{{ project_composer_vendor_path }}
+  register: check_composer_vendor_path
+  when: project_copy_previous_composer_vendors
+
+- name: Copy vendor dir if exists to speed up composer
+  command: /bin/cp -prT {{ deploy_helper.current_path }}/{{ project_composer_vendor_path }} {{ deploy_helper.new_release_path }}/{{ project_composer_vendor_path }}
+  when: project_copy_previous_composer_vendors and check_composer_vendor_path.stat.exists
+
+- name: Do composer install
+  command: "{{ project_command_for_composer_install }} chdir={{ deploy_helper.new_release_path }}"
+  environment: "{{ project_environment }}"
+  when: project_has_composer
+
+- name: Check if npm dir exists
+  stat: path={{ deploy_helper.current_path }}/{{ project_npm_modules_path }}
+  register: check_npm_modules_path
+  when: project_copy_previous_npm_modules
+
+- name: Copy npm dir if exists to speed up npm install
+  command: /bin/cp -prT {{ deploy_helper.current_path }}/{{ project_npm_modules_path }} {{ deploy_helper.new_release_path }}/{{ project_npm_modules_path }}
+  when: project_copy_previous_npm_modules and check_npm_modules_path.stat.exists
+
+- name: Do npm install
+  command: "{{ project_command_for_npm_install }} chdir={{ deploy_helper.new_release_path }}"
+  environment: "{{ project_environment }}"
+  when: project_has_npm
+
+- name: Check if bower dir exists
+  stat: path={{ deploy_helper.current_path }}/{{ project_bower_components_path }}
+  register: check_bower_components_path
+  when: project_copy_previous_bower_components
+
+- name: Copy bower dir if exists to speed up bower install
+  command: /bin/cp -prT {{ deploy_helper.current_path }}/{{ project_bower_components_path }} {{ deploy_helper.new_release_path }}/{{ project_bower_components_path }}
+  when: project_copy_previous_bower_components and check_bower_components_path.stat.exists
+
+- name: Do bower install
+  command: "{{ project_command_for_bower_install }} chdir={{ deploy_helper.new_release_path }}"
+  environment: "{{ project_environment }}"
+  when: project_has_bower
+
+- name: Do yarn install
+  command: "{{ project_command_for_yarn_install }} chdir={{ deploy_helper.new_release_path }}"
+  environment: "{{ project_environment }}"
+  when: project_has_yarn
+
+### Finalize
+- name: Include finalize hook
+  include_tasks: "{{ project_deploy_hook_on_finalize }}"
+  when: project_deploy_hook_on_finalize is defined and project_deploy_hook_on_finalize
+
+- name: Run post_build_commands in the new_release_path
+  command: "{{ item }} chdir={{ deploy_helper.new_release_path }}"
+  with_items: "{{ project_post_build_commands }}"
+  environment: "{{ project_environment }}"
+
+- name: Finalize the deploy
+  deploy_helper:
+    path: "{{ project_root }}"
+    release: "{{ deploy_helper.new_release }}"
+    current_path: "{{ project_current_path }}"
+    state: finalize
+    clean: false
+  when: project_finalize
+
+### Running post finalize routines
+- name: Include finalize hook
+  include_tasks: "{{ project_deploy_hook_post_finalize }}"
+  when: project_deploy_hook_post_finalize is defined and project_deploy_hook_post_finalize
+
+- name: Removing old releases
+  deploy_helper:
+    path: "{{ project_root }}"
+    release: "{{ deploy_helper.new_release }}"
+    state: clean
+    clean: "{{ project_clean|bool }}"
+    keep_releases: "{{ project_keep_releases|int }}"
+  when: project_finalize

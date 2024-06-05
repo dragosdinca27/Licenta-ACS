@@ -1,0 +1,84 @@
+---
+
+- name: Add PHP official repository
+  apt_repository:
+    repo: '{{ php_repository }}'
+    state: present
+    update_cache: yes
+  when: ansible_distribution == "Ubuntu" and php_repository is defined
+
+- include_tasks: install-php-repo-Debian.yml
+  when: ansible_distribution == "Debian" and php_repository is defined
+
+- name: Only run "update_cache=yes" if the last one is more than 3600 seconds ago
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Install PHP CLI package
+  apt:
+    name: php{{ php_version }}-cli
+    state: '{{ php_packages_state }}'
+  when: php_cli is defined and php_cli
+
+- name: Install PHP Mysql package
+  apt:
+    name: php{{ php_version }}-mysql
+    state: '{{ php_packages_state }}'
+  when: php_mysql is defined and php_mysql
+
+  # ToDo: Remove this task when the default Ansible version is at least 2.8
+- name: Install PHP FPM package (when Ansible version < 2.8)
+  apt:
+    name: php{{ php_version }}-fpm
+    state: '{{ php_packages_state }}'
+  when: php_fpm is defined and php_fpm and ansible_version.full is version_compare('2.8', '<')
+
+- name: Install PHP FPM package (when Ansible version >= 2.8)
+  apt:
+    name: php{{ php_version }}-fpm
+    state: '{{ php_packages_state }}'
+    policy_rc_d: "{{ 0 if (php_fpm_start) else 101 }}"
+  when: php_fpm is defined and php_fpm and ansible_version.full is version_compare('2.8', '>=')
+
+  # ToDo: Remove this task when the default Ansible version is at least 2.8
+- name: Install PHP packages (when Ansible version < 2.8)
+  apt:
+    name: '{{ item }}'
+    state: '{{ php_packages_state }}'
+  with_items:
+    - '{{ php_default_packages | list }}'
+    - '{{ php_packages | list }}'
+  when: (php_default_packages is defined or php_packages is defined) and ansible_version.full is version_compare('2.8', '<')
+
+- name: Install PHP packages (when Ansible version >= 2.8)
+  apt:
+    name: '{{ item }}'
+    state: '{{ php_packages_state }}'
+    policy_rc_d: "{{ 0 if (php_fpm_start) else 101 }}"
+  with_items:
+    - '{{ php_default_packages | list }}'
+    - '{{ php_packages | list }}'
+  when: (php_default_packages is defined or php_packages is defined) and ansible_version.full is version_compare('2.8', '>=')
+
+- name: Install composer
+  include: install-composer.yml
+  when: php_composer|bool == true
+
+- name: Install and configure Ioncube Loaders
+  include: ioncube-loaders.yml
+  when: ioncube_loader_file is defined
+
+- name: Install & configure Xdebug
+  include: install-xdebug.yml
+  when: php_xdebug|default(false)
+
+  # Configure PHP
+- include: php-fpm.yml
+  when: php_fpm is defined and php_fpm
+
+- include: php-fpm_custom_user.yml
+  when: php_fpm is defined and php_fpm and php_fpm_custom_user|bool == true
+
+- include: php-cli.yml
+  when: php_cli is defined and php_cli

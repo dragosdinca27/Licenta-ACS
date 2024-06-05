@@ -1,0 +1,11 @@
+---
+- name: "MySQL Setup on {{ target|upper }}"
+  hosts: '{{ target }}'
+  become: yes
+
+  vars_files:
+    - vars/common.yml
+    - vars/prod.yml
+
+  roles:
+    - mysql

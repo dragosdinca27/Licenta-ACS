@@ -1,0 +1,50 @@
+---
+- name: Copy the wp-config file
+  template:
+    src: "templates/{{template_name}}"
+    dest: "{{project_root}}/current/wp-config.php"
+
+- name: Download BaltimoreCyberTrustRoot
+  get_url:
+    url: https://www.digicert.com/CACerts/BaltimoreCyberTrustRoot.crt.pem
+    dest: /etc/ssl/BaltimoreCyberTrustRoot.crt.pem
+
+- name: Create uploads folder
+  file:
+    path: "{{project_root}}/shared/uploads"
+    state: directory
+
+# - name: TODO Link the uploads folders to blob storage
+
+
+# - name: Give permissions to folders #TODO Check why it can't find user deploy
+#   file:
+#     path: "{{project_root}}/current"
+#     owner: "{{ansible_user}}"
+#     group: "www-data"
+#     recurse: yes
+#     state: directory
+
+- name: Clear the opcache
+  service:
+    name: "php7.4-fpm"
+    state: reloaded
+  become: true
+  become_user: root
+
+- name: Check nignx
+  command: nginx -t
+  
+# - name: Reload nginx
+#   service:
+#     name: nginx
+#     state: reloaded
+#   become: true
+#   become_user: root
+
+- name: add correct permissions to content folder
+  file:
+    path: "{{project_root}}/current/wp-content"
+    mode: '774'
+    group: www-data
+    recurse: yes

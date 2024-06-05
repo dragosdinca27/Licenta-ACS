@@ -1,0 +1,6 @@
+---
+
+# Default paths
+nginx_path: /etc/nginx
+nginx_conf_file_path: '{{ nginx_path }}/nginx.conf'
+nginx_conf_path: '{{ nginx_path }}/conf.d'
