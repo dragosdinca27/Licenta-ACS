@@ -1,0 +1,43 @@
+---
+- name: Run "update_cache=yes" if the last one is more than 3600 seconds ago
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Install Ubuntu 20.04 server packages
+  package:
+    name: '{{ item }}'
+    state: '{{ server_packages_state }}'
+  with_items:
+    - '{{ server_packages | list }}'
+    - '{{ server_default_packages | list }}'
+  when: ansible_distribution == "Ubuntu" and ansible_distribution_release == 'bionic'
+
+- name: Set server timezone to {{ server_timezone }}
+  timezone:
+    name: '{{ server_timezone }}'
+
+- name: Set server default system language pack to {{ server_locale }}
+  locale_gen:
+    name: '{{ server_locale }}'
+    state: present
+
+- name: Set server global environment variables
+  lineinfile:
+    dest: /etc/environment
+    regexp: '^{{ item.key }}\ ?='
+    line: "{{ item.key }}='{{ item.value }}'"
+  with_dict: "{{ server_environment_variables }}"
+  when: server_environment_variables|length > 0
+  no_log: true
+
+- name: Create groups
+  group:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - '{{ server_groups }}'
+
+- name: Provision local SSH users
+  include_tasks: create-users.yml
+  when: server_provision_local_users

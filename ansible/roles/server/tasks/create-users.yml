@@ -1,0 +1,28 @@
+---
+
+- name: sudo group with no password
+  lineinfile:
+    path: /etc/sudoers
+    state: present
+    regexp: '^%sudo'
+    line: '%sudo ALL=(ALL) NOPASSWD: ALL'
+    validate: 'visudo -cf %s'
+
+- name: Create local SSH users
+  user:
+    name: "{{ item.key }}"
+    shell: /bin/bash
+    groups: "{{ item.value.groups | list }}"
+    append: yes
+  with_dict:
+    - "{{ server_default_active_users }}"
+    - "{{ server_active_users }}"
+
+- name: Add users public SSH key
+  authorized_key:
+    user: "{{ item.key }}"
+    state: present
+    key: "{{ item.value.public_key }}"
+  with_dict:
+  - "{{ server_default_active_users }}"
+  - "{{ server_active_users }}"
