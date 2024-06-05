@@ -1,0 +1,11 @@
+---
+
+nginx:
+  user:
+    name: nginx
+    group: nginx
+
+nginx_geoip: no
+nginx_packages_state: present
+
+nginx_http_auth_user: dragos

@@ -1,0 +1,9 @@
+---
+
+project_git_repo: git@35.246.190.85:proiect-licenta/application.git
+project_version: "{{ branch|default('master') }}"
+
+project_root_create: true
+project_root: /var/www/project
+
+project_deploy_key: id_rsa

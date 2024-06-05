@@ -1,0 +1,46 @@
+---
+
+- name: Add official Nginx repository signing key
+  apt_key: url=http://nginx.org/keys/nginx_signing.key state=present
+
+- name: Add official Nginx repository
+  apt_repository:
+    repo: "deb http://nginx.org/packages/{{ansible_distribution|lower}} {{ansible_distribution_release}} nginx"
+    state: present
+  when: ansible_os_family == "Debian"
+
+- name: Install Nginx
+  package: pkg=nginx state={{ nginx_packages_state }}
+
+- name: Install Geoip Module
+  package: pkg=nginx-module-geoip state=latest force=yes
+  when: nginx_geoip == true
+
+- name: Replace the nginx.conf file
+  template: src=nginx.conf.tpl dest=/etc/nginx/nginx.conf
+
+- name: Copy performance settings file
+  copy: src=performance.conf dest=/etc/nginx/conf.d/performance.conf owner=root group=root
+
+- name: Copy the security settings file
+  copy: src=security.conf dest=/etc/nginx/conf.d/security.conf owner=root group=root
+
+- name: Copy the static content settings file
+  copy: src=static-content.conf dest=/etc/nginx/conf.d/static-content.conf owner=root group=root
+
+- name: Copy GZIP settings file
+  copy: src=gzip.conf dest=/etc/nginx/conf.d/gzip.conf owner=root group=root
+
+- name: Ensures conf.d/ssl directory exists
+  file: path=/etc/nginx/conf.d/ssl state=directory
+
+- name: Create virtual hosts directories
+  file: path=/etc/nginx/{{ item }} state=directory mode=0755
+  with_items:
+    - sites-available
+    - sites-enabled
+
+- name: Ensure Nginx has started
+  service:
+    name: nginx
+    state: started

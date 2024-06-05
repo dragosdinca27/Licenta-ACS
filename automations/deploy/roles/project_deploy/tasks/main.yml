@@ -1,0 +1,47 @@
+---
+- name: Ensure project root exists
+  file:
+    path: "{{ project_root }}"
+    owner: "{{ project_root_owner }}"
+    group: "{{ project_root_group }}"
+    state: directory
+  when: project_root_create|bool == true and project_root is defined
+  become: yes
+  become_user: root
+
+- name: Ensure .ssh folder exists in user\'s home
+  file: path=~/.ssh state=directory mode=0700
+  when: project_deploy_key is defined
+
+
+- name: Clone repository
+  git:
+    repo: "{{ project_git_repo }}"
+    dest: "{{ project_source_path }}"
+    version: "{{ project_version }}"
+    force: true
+    accept_hostkey: true
+    ssh_opts: '-o StrictHostKeyChecking=no'
+
+
+- name: Install requirements
+  pip: requirements='{{ project_root }}/requirements.txt'
+
+- name: Copy Upstart configuration
+  template: src=hello-world.upstart.j2 dest=/etc/init/hello-world.conf
+
+- name: Make sure our server is running
+  service: name=hello-world state=started
+
+- name: Copy Nginx site
+  template: src=hello-world.nginx.j2 dest=/etc/nginx/sites-enabled/hello-world
+  notify:
+    - restart nginx
+
+- name: Remove any default sites
+  file: path=/etc/nginx/sites-enabled/default state=absent
+  notify:
+    - restart nginx
+
+- name: Make sure nginx is running
+  service: name=nginx state=started

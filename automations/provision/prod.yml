@@ -1,0 +1,14 @@
+---
+
+- name:  Host {{ target }} provisioning
+  hosts: '{{ target }}'
+  become: yes
+
+  vars_files:
+    - vars/prod.yml
+
+  roles:
+    - server
+    - nginx
+    - mysql
+    - newrelic

@@ -1,0 +1,35 @@
+---
+server_packages_state: present
+
+#  Server packages
+server_default_packages:
+  - python3-software-properties
+  - software-properties-common
+  - git
+  - curl
+  - vim
+
+server_packages: []
+
+server_timezone: Europe/Bucharest
+server_locale: en_US.UTF-8
+
+# Set global environment variables
+server_environment_variables: {}
+
+# Server groups
+server_groups: []
+
+# Enable or disable server local users provisioning
+# useful when the server has no SSO system
+server_provision_local_users: False
+
+# Default users enabled on server
+server_default_active_users:
+  dragos.dinca:
+    groups: [sudo]
+    public_key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDKt3ai2jYFLdQ4jRXH1vjcW9JiUanqL9GyU0L1V+cmhQFiJ+eE501z9Q+OloVeN2tMqsymFYY6BZmj0JG4HO0IsBzuKDVPw5We3/QY2h6kGzzmDFCD8+N/xTWe+xKnCUcLJPyra31HDmTUKvAd+50ZZjY6zs5pCxxw5ljW6Jv/aGpLzdubIQZjSEsCB8AZA5bgCqHaZGS5KmZCiNzkZdsKVknzbypAIlXXPKzNpkFt99jHflEuhJ33Sy19qOSri6NZCUvj1aiPmaz6k3achG3mdfB9ID8e5d/6mAY4ej/BiJj1DXDjEqSXNLfNxkrH3YtLU9UfqcQswWa5xg+6vMlr"
+
+
+# Extra users enabled on server
+server_active_users: {}
